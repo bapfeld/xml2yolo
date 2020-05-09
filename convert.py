@@ -1,15 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from xml.dom import minidom
-import os
+import os, re
 import glob
-
-lut={}
-lut["accessory"] =0
-lut["top"]       =1
-lut["bottom"]    =2
-lut["bag"]       =3
-lut["shoes"]     =4
 
 
 def convert_coordinates(size, box):
@@ -26,13 +19,16 @@ def convert_coordinates(size, box):
     return (x,y,w,h)
 
 
-def convert_xml2yolo( lut ):
+def convert_xml2yolo(dir_in, dir_out):
 
-    for fname in glob.glob("*.xml"):
+    labels = {'default_val': 1}
+    xml_files = [x for x in glob.glob(f"{dir_in}/*.xml")]
+        
+    for fname in xml_files:
         
         xmldoc = minidom.parse(fname)
-        
-        fname_out = (fname[:-4]+'.txt')
+        fname_out = re.sub(dir_in, dir_out, fname)
+        fname_out = fname_out[:-4] + '.txt'
 
         with open(fname_out, "w") as f:
 
@@ -44,11 +40,9 @@ def convert_xml2yolo( lut ):
             for item in itemlist:
                 # get class label
                 classid =  (item.getElementsByTagName('name')[0]).firstChild.data
-                if classid in lut:
-                    label_str = str(lut[classid])
-                else:
-                    label_str = "-1"
-                    print ("warning: label '%s' not in look-up table" % classid)
+                if classid not in labels:
+                    labels[classid] = len(labels) + 1
+                lbl = str(labels[classid])
 
                 # get bbox coordinates
                 xmin = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('xmin')[0]).firstChild.data
@@ -59,14 +53,31 @@ def convert_xml2yolo( lut ):
                 bb = convert_coordinates((width,height), b)
                 #print(bb)
 
-                f.write(label_str + " " + " ".join([("%.6f" % a) for a in bb]) + '\n')
+                f.write(lbl + " " + " ".join([("%.6f" % a) for a in bb]) + '\n')
 
-        print ("wrote %s" % fname_out)
-
-
+def initialize_params():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--label_directory_in',
+        help="Directory to find .xml files",
+        required=True,
+    )
+    parser.add_argument(
+        '--label_directory_out',
+        help="Directory to output yolo files. Defaults to same directory as input",
+        required=False
+    )
+    return parser.parse_args()
 
 def main():
-    convert_xml2yolo( lut )
+    args = initialize_params()
+    dir_in = os.path.expanduser(args.label_directory_in)
+    if args.label_directory_out is not None:
+        dir_out = os.path.expanduser(args.label_directory_out)
+    else:
+        dir_out = dir_in
+        
+    convert_xml2yolo(dir_in, dir_out)
 
 
 if __name__ == '__main__':
