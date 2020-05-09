@@ -3,7 +3,8 @@
 from xml.dom import minidom
 import os, re
 import glob
-
+import argparse
+from collections import OrderedDict
 
 def convert_coordinates(size, box):
     dw = 1.0/size[0]
@@ -19,11 +20,11 @@ def convert_coordinates(size, box):
     return (x,y,w,h)
 
 
-def convert_xml2yolo(dir_in, dir_out):
+def convert_xml2yolo(dir_in, dir_out, lbl_out):
 
-    labels = {'default_val': 1}
+    labels = OrderedDict()
     xml_files = [x for x in glob.glob(f"{dir_in}/*.xml")]
-        
+    
     for fname in xml_files:
         
         xmldoc = minidom.parse(fname)
@@ -51,9 +52,13 @@ def convert_xml2yolo(dir_in, dir_out):
                 ymax = ((item.getElementsByTagName('bndbox')[0]).getElementsByTagName('ymax')[0]).firstChild.data
                 b = (float(xmin), float(xmax), float(ymin), float(ymax))
                 bb = convert_coordinates((width,height), b)
-                #print(bb)
 
                 f.write(lbl + " " + " ".join([("%.6f" % a) for a in bb]) + '\n')
+
+    if lbl_out is not None:
+        with open(lbl_out, 'w') as f_out:
+            for l in list(labels.keys()):
+                f_out.write(l + '\n')
 
 def initialize_params():
     parser = argparse.ArgumentParser()
@@ -67,7 +72,13 @@ def initialize_params():
         help="Directory to output yolo files. Defaults to same directory as input",
         required=False
     )
+    parser.add_argument(
+        '--label_file_out',
+        help="Path to where to save labels.txt, if desired.",
+        required=False
+    )
     return parser.parse_args()
+
 
 def main():
     args = initialize_params()
@@ -76,8 +87,12 @@ def main():
         dir_out = os.path.expanduser(args.label_directory_out)
     else:
         dir_out = dir_in
+    if args.label_file_out is not None:
+        lbl_out = os.path.expanduser(args.label_file_out)
+    else:
+        lbl_out = None
         
-    convert_xml2yolo(dir_in, dir_out)
+    convert_xml2yolo(dir_in, dir_out, lbl_out)
 
 
 if __name__ == '__main__':
